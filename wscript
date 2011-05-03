@@ -88,7 +88,7 @@ def set_options(opt):
 
   opt.add_option( '--without-snapshot'
                 , action='store_true'
-                , default=False
+                , default=True
                 , help='Build without snapshotting V8 libraries. You might want to set this for cross-compiling. [Default: False]'
                 , dest='without_snapshot'
                 )
@@ -553,7 +553,7 @@ def configure(conf):
   # Configure default variant
   conf.setenv('default')
   conf.env.append_value('CPPFLAGS', '-DNDEBUG')
-  default_compile_flags = ['-g', '-O3']
+  default_compile_flags = ['-g', '-Os'] #, '-fno-rtti', '-fno-exceptions'
   conf.env.append_value('CCFLAGS', default_compile_flags)
   conf.env.append_value('CXXFLAGS', default_compile_flags)
   conf.write_config_header("config.h")

@@ -154,7 +154,7 @@ LIBRARY_FLAGS = {
       }
     },
     'mode:release': {
-      'CCFLAGS':      ['-O3', '-fomit-frame-pointer', '-fdata-sections',
+      'CCFLAGS':      ['-Os', '-fomit-frame-pointer', '-fdata-sections',
                        '-ffunction-sections'],
       'os:android': {
         'CCFLAGS':    ['-mthumb', '-Os'],
