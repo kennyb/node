@@ -347,6 +347,18 @@ Handle<Value> Platform::GetInterfaceAddresses() {
         struct sockaddr_in6 *a6 = (struct sockaddr_in6*)address;
         inet_ntop(AF_INET6, &(a6->sin6_addr), ip, INET6_ADDRSTRLEN);
         info->Set(String::New("ip6"), String::New(ip));
+        
+        a6 = (struct sockaddr_in6*)addr->ifa_netmask;
+        inet_ntop(AF_INET6, &(a6->sin6_addr), ip, INET6_ADDRSTRLEN);
+        info->Set(String::New("netmask6"), String::New(ip));
+        
+        // for some reason it will crash if addr->ifa_broadaddr is NULL
+        if(addr->ifa_flags & IFF_BROADCAST && addr->ifa_broadaddr) {
+          a6 = (struct sockaddr_in6*)addr->ifa_broadaddr;
+          inet_ntop(AF_INET6, &(a6->sin6_addr), ip, INET6_ADDRSTRLEN);
+          info->Set(String::New("broadcast6"), String::New(ip));
+        }
+        
         if (addr->ifa_flags) {
           info->Set(String::New("internal"),
                     IsInternal(addr) ? True() : False());
@@ -358,6 +370,17 @@ Handle<Value> Platform::GetInterfaceAddresses() {
         struct sockaddr_in *a4 = (struct sockaddr_in*)address;
         inet_ntop(AF_INET, &(a4->sin_addr), ip, INET6_ADDRSTRLEN);
         info->Set(String::New("ip"), String::New(ip));
+        
+        a4 = (struct sockaddr_in*)addr->ifa_netmask;
+        inet_ntop(AF_INET, &(a4->sin_addr), ip, INET6_ADDRSTRLEN);
+        info->Set(String::New("netmask"), String::New(ip));
+        
+        if(addr->ifa_flags & IFF_BROADCAST) {
+          a4 = (struct sockaddr_in*)addr->ifa_broadaddr;
+          inet_ntop(AF_INET, &(a4->sin_addr), ip, INET6_ADDRSTRLEN);
+          info->Set(String::New("broadcast"), String::New(ip));
+        }
+        
         if (addr->ifa_flags) {
           info->Set(String::New("internal"),
                     IsInternal(addr) ? True() : False());
