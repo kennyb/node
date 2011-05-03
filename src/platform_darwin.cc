@@ -33,6 +33,10 @@
 #include <unistd.h>  // sysconf
 #include <sys/param.h>
 #include <sys/sysctl.h>
+#include <sys/ioctl.h>
+#include <netinet/in.h>
+#include <net/if.h>
+#include <arpa/inet.h>
 #include <time.h>
 
 namespace node {
@@ -209,10 +213,130 @@ int Platform::GetLoadAvg(Local<Array> *loads) {
   return 0;
 }
 
-
+// require('os').getNetworkInterfaces();
 v8::Handle<v8::Value> Platform::GetInterfaceAddresses() {
   HandleScope scope;
-  return scope.Close(Object::New());
+  Local<Object> a = Object::New();
+  struct ifreq *ifr, *iface, *ifend;
+  struct ifconf ifc;
+  struct sockaddr_in *sin;
+  int flags;
+  int s, i;
+  int numif = 32; // for now, we select up to 32 interfaces.. this can become optional
+
+  if((s = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+    perror("socket");
+    exit(1);
+  }
+
+  memset(&ifc, 0, sizeof(ifc));
+  ifc.ifc_len = numif * sizeof(struct ifreq);
+  if((ifr = (struct ifreq*) malloc(ifc.ifc_len)) == NULL) {
+    perror("malloc");
+    exit(3);
+  }
+
+  ifc.ifc_req = ifr;
+  numif = 0;
+  if(ioctl(s, SIOCGIFCONF, &ifc) < 0) {
+    perror("ioctl2");
+    exit(4);
+  }
+
+  iface = ifc.ifc_req;
+  ifend = (struct ifreq *)((char *)iface + ifc.ifc_len);
+  for(; iface < ifend; ++iface) {
+    if(ioctl(s, SIOCGIFFLAGS, (char *)iface) < 0) {
+      continue;
+    }
+    
+    flags = iface->ifr_flags;
+    if((flags & IFF_UP) == 0)
+      continue;
+    
+    char ip[INET6_ADDRSTRLEN];
+    Local<String> name = String::New(iface->ifr_name);
+    Local<Object> info;
+    if (a->Has(name)) {
+      info = a->Get(name)->ToObject();
+    } else {
+      info = Object::New();
+      a->Set(name, info);
+    }
+    
+    //printf("%-8s:", iface->ifr_name);
+    if(ioctl(s, SIOCGIFADDR, (caddr_t)iface) < 0) {
+      //if(errno == EADDRNOTAVAIL || errno == EAFNOSUPPORT)
+        //printf("ip not available");
+    }
+    
+    sin = (struct sockaddr_in *)&iface->ifr_addr;
+    inet_ntop(AF_INET, &(sin->sin_addr), ip, INET6_ADDRSTRLEN);
+    info->Set(String::New("ip"), String::New(ip));
+    
+    if(ioctl(s, SIOCGIFNETMASK, (caddr_t)iface) >= 0) {
+      sin = (struct sockaddr_in *)&iface->ifr_addr;
+      if (sin->sin_addr.s_addr != 0) {
+  			inet_ntop(AF_INET, &(sin->sin_addr), ip, INET6_ADDRSTRLEN);
+        info->Set(String::New("netmask"), String::New(ip));
+  		}
+    }
+    
+    if(flags & IFF_POINTOPOINT) {
+      if(ioctl(s, SIOCGIFDSTADDR, (caddr_t)iface) >= 0) {
+        sin = (struct sockaddr_in *)&iface->ifr_addr;
+        if (sin->sin_addr.s_addr != 0) {
+    			inet_ntop(AF_INET, &(sin->sin_addr), ip, INET6_ADDRSTRLEN);
+          info->Set(String::New("dest"), String::New(ip));
+    		}
+      }
+    }
+    
+    if(flags & IFF_BROADCAST) {
+      if(ioctl(s, SIOCGIFBRDADDR, (caddr_t)iface) >= 0) {
+        sin = (struct sockaddr_in *)&iface->ifr_addr;
+        if (sin->sin_addr.s_addr != 0) {
+    			inet_ntop(AF_INET, &(sin->sin_addr), ip, INET6_ADDRSTRLEN);
+          info->Set(String::New("broadcast"), String::New(ip));
+    		}
+  		}
+		}
+    
+    printf("internal: %d\n", flags & IFF_LOOPBACK);
+    info->Set(String::New("internal"), flags & IFF_LOOPBACK ? True() : False());
+    
+    /*
+    struct sockaddr *saddr = (struct sockaddr *)&iface->ifr_addr;
+    //struct sockaddr *saddr_in = (struct sockaddr_in *)iface->ifr_addr;
+    
+    printf("%-8s:\n", iface->ifr_name);
+    if(saddr->sa_family == AF_INET || saddr->sa_family == AF_INET6) {
+	    
+	    printf("%-8s:\n", iface->ifr_name); //, inet_ntoa(sin->sin_addr)
+      numif++;
+    }
+    */
+    
+    //size_t if_size = /*iface->ifr_addr.sa_len + */sizeof(struct ifreq);
+    //printf("len: %d - %d\n", remaining, if_size);
+    //iface += if_size;
+    //remaining -= if_size;
+  }
+/*
+  numif = ifc.ifc_len / sizeof(struct ifreq);
+  printf("num interfaces2: %d %d\n", ifc.ifc_len, numif);
+  for (i = 0; i < numif; i++) {
+    struct ifreq *r = &ifr[i];
+    struct sockaddr_in *sin = (struct sockaddr_in *)&r->ifr_addr;
+
+    printf("%-8s : %s\n", r->ifr_name, inet_ntoa(sin->sin_addr));
+  }
+*/
+
+  close(s);
+  free(ifr);
+
+  return scope.Close(a);
 }
 
 }  // namespace node
